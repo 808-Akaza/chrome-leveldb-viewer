@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LevelDB Viewer — Chrome storage inspector</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗄️</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">🗄️</span>
+    <div>
+      <h1>LevelDB Viewer</h1>
+      <p>Chrome storage inspector · powered by <code>golang/leveldb</code></p>
+    </div>
+  </div>
+  <div id="dbBadge" class="db-badge hidden"></div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <section class="card">
+      <h2>Open a database</h2>
+      <p class="hint">Point at a Chrome LevelDB folder such as
+        <code>…/Default/Local Storage/leveldb</code>,
+        <code>…/Default/Session Storage</code>, or an IndexedDB
+        <code>*.leveldb</code> folder. Files are copied before reading —
+        the originals are never modified.</p>
+
+      <label class="open-btn" for="folderInput">📁 Upload a LevelDB folder</label>
+      <input type="file" id="folderInput" webkitdirectory multiple hidden>
+
+      <label class="open-btn secondary" for="filesInput">📄 Upload files (.ldb / MANIFEST / .log)</label>
+      <input type="file" id="filesInput" multiple hidden>
+
+      <div class="path-row">
+        <input type="text" id="pathInput" placeholder="/path/on/this/machine/to/leveldb">
+        <button id="pathOpenBtn" class="btn">Open</button>
+      </div>
+
+      <div id="samples" class="samples hidden">
+        <h3>Sample databases</h3>
+        <div id="sampleList"></div>
+      </div>
+    </section>
+
+    <section id="summaryCard" class="card hidden">
+      <h2>Database</h2>
+      <dl class="meta">
+        <dt>Source</dt><dd id="sumSource"></dd>
+        <dt>Mode</dt><dd id="sumMode"></dd>
+        <dt>Files</dt><dd id="sumFiles"></dd>
+        <dt>Records</dt><dd id="sumTotal"></dd>
+      </dl>
+      <div id="sumTruncated" class="warn hidden">Record limit reached — the listing is truncated.</div>
+      <h3>Record types</h3>
+      <div id="typeChips" class="chips"></div>
+      <div id="originsWrap" class="hidden">
+        <h3>Origins</h3>
+        <div id="originList" class="origin-list"></div>
+      </div>
+    </section>
+  </aside>
+
+  <main class="main">
+    <div id="emptyState" class="state">
+      <div class="state-icon">🔍</div>
+      <h2>No database open</h2>
+      <p>Open a Chrome LevelDB folder, upload its files, or load a sample database to start browsing keys and values.</p>
+    </div>
+
+    <div id="loadingState" class="state hidden">
+      <div class="spinner"></div>
+      <p id="loadingText">Parsing LevelDB files…</p>
+    </div>
+
+    <div id="errorState" class="state hidden">
+      <div class="state-icon">⚠️</div>
+      <h2>Could not open database</h2>
+      <p id="errorText" class="error-text"></p>
+      <button id="errorDismiss" class="btn">Dismiss</button>
+    </div>
+
+    <div id="browser" class="browser hidden">
+      <div class="toolbar">
+        <input type="search" id="searchInput" placeholder="Search keys, values, origins…">
+        <select id="typeFilter">
+          <option value="all">All types</option>
+          <option value="ls-item">Local Storage items</option>
+          <option value="ls-meta">Local Storage metadata</option>
+          <option value="ss-item">Session Storage items</option>
+          <option value="ss-namespace">Session Storage namespaces</option>
+          <option value="version">Schema version</option>
+          <option value="idb-data">IndexedDB records</option>
+          <option value="idb-index">IndexedDB indexes</option>
+          <option value="idb-meta">IndexedDB metadata</option>
+          <option value="other">Other records</option>
+        </select>
+        <span id="matchCount" class="match-count"></span>
+        <div class="pager">
+          <button id="prevBtn" class="btn" disabled>‹</button>
+          <span id="pageInfo"></span>
+          <button id="nextBtn" class="btn" disabled>›</button>
+        </div>
+      </div>
+      <div class="selbar">
+        <span id="selCount">None selected</span>
+        <span class="sel-hint">Ctrl+click toggles a record. Shift+click selects a range. Ctrl+A selects every match.</span>
+        <button id="clearSelBtn" class="btn" disabled>Clear</button>
+        <button id="exportBtn" class="btn primary" disabled>Export report</button>
+      </div>
+      <p id="exportNote" class="export-note hidden"></p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th class="col-type">Type</th><th>Key</th><th>Value</th><th class="col-size">Size</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div id="noMatches" class="state small hidden">
+          <p>No records match the current search or filters.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside id="detail" class="detail hidden">
+    <div class="detail-head">
+      <div>
+        <span id="detailType" class="badge"></span>
+        <span id="detailDeleted" class="badge deleted hidden">deleted</span>
+      </div>
+      <button id="detailClose" class="icon-btn" title="Close">✕</button>
+    </div>
+    <dl class="meta">
+      <dt>Origin</dt><dd id="detailOrigin">—</dd>
+      <dt>Storage key</dt><dd id="detailStorageKey">—</dd>
+      <dt>Value size</dt><dd id="detailSize">—</dd>
+    </dl>
+
+    <h3>Key</h3>
+    <div class="tabs" data-target="keyView" id="keyTabs"></div>
+    <pre id="keyView" class="viewer"></pre>
+
+    <h3>Value</h3>
+    <div class="tabs" data-target="valueView" id="valueTabs"></div>
+    <pre id="valueView" class="viewer"></pre>
+  </aside>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
