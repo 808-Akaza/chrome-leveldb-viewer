@@ -1,3 +1,5 @@
+#DISCLAIMER: This tool is built using AI and won't be maintained apart from initial release. 
+
 # LevelDB Viewer
 
 A GUI application for inspecting LevelDB databases, built on
